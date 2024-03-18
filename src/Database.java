@@ -1,3 +1,4 @@
+import java.time.LocalDate;
 import java.util.Scanner;
 import java.sql.* ;
 
@@ -120,13 +121,13 @@ public class Database {
                 System.out.println("Please enter the tile of the book you'd like to search for:");
                 System.out.print(">>");
                 String input = scanner.nextLine();
-                String query = String.format("""
-                    SELECT in_stock AS stock FROM
-                    Book b  WHERE  b.title = '%s';
-                """,input);
-                System.out.println(query);
                 try {
-                    ResultSet rs=statement.executeQuery(query);
+                    PreparedStatement query = connection.prepareStatement("""
+                        SELECT in_stock AS stock FROM
+                        Book b  WHERE  b.title = ?;
+                    """);
+                    query.setString(1,input);
+                    ResultSet rs=query.executeQuery();
                     if(!rs.next()){
                         System.out.println("There are no copies of the requested book");
                         return;
@@ -158,26 +159,79 @@ public class Database {
         System.out.println("Please enter the tile of the book you'd like to purchase:");
         System.out.print(">>");
         String input = scanner.nextLine();
-        String query = String.format("""
-                    SELECT in_stock AS stock FROM
-                    Book b  WHERE  b.title = '%s';
-                """,input);
         try {
-            ResultSet rs=statement.executeQuery(query);
+            PreparedStatement query = connection.prepareStatement("""
+                        SELECT in_stock AS stock FROM
+                        Book b  WHERE  b.title = ?;
+                    """);
+            query.setString(1,input);
+            ResultSet rs=query.executeQuery();
             if(!rs.next() ||  rs.getInt("stock")<=0){
                 System.out.println("There are no copies of the requested book");
                 return;
             }
-            query= String.format("""
-                UPDATE Book
-                SET in_stock = in_stock-1
-                WHERE title = '%s';
-            """,input);
+            System.out.println("Please enter your credit card number (no spaces, just numbers):");
+            System.out.print(">>");
+            String cardNumS = scanner.nextLine();
+            if(cardNumS.length()!= 16){
+                System.out.println("invalid card number");
+                return;
+            }
+            for(char c : cardNumS.toCharArray()){
+                if (!Character.isDigit(c)){
+                    System.out.println("invalid card number");
+                    return;
+                }
+            }
 
-            if(statement.executeUpdate(query) <1){
+
+            System.out.println("Please enter your expiration date (MMYY):");
+            System.out.print(">>");
+            String tempDate = scanner.nextLine();
+            if(tempDate.length()!= 4){
+                System.out.println("invalid expiration date");
+                return;
+            }
+
+            for(char c : tempDate.toCharArray()){
+                if (!Character.isDigit(c)){
+                    System.out.println("invalid expiration date");
+                    return;
+                }
+            }
+
+            int month = Integer.parseInt(tempDate.substring(0, 2));
+            int year = Integer.parseInt(tempDate.substring(2));
+
+
+
+            query = connection.prepareStatement("INSERT INTO REGULARCUSTOMER (card_num,EXPIRY) values (?,?)"
+            ,Statement.RETURN_GENERATED_KEYS);
+            query.setLong(1,Long.parseLong(cardNumS));
+            query.setDate(2, Date.valueOf(LocalDate.of(year+2000,month,1)));
+            if(query.executeUpdate()<0 || !query.getGeneratedKeys().next()){
                 System.out.println("purchase failed inexplicably, sorry about that");
                 return;
             }
+
+            int cid = query.getGeneratedKeys().getInt(1);
+
+
+            query= connection.prepareStatement("""
+                UPDATE Book
+                SET in_stock = in_stock-1
+                WHERE title = ?;
+            """);
+            query.setString(1,input);
+
+            if(query.executeUpdate() <1){
+                System.out.println("purchase failed inexplicably, sorry about that");
+                return;
+            }
+
+            query = connection.prepareStatement("INSERT INTO Transaction (cid) VALUES (?)");
+            query.setInt(1, cid);
+            query.executeUpdate();
 
             System.out.printf("Your purchase of '%s' was performed successfully. Thank you for your " +
                     "patronage\n",input);
