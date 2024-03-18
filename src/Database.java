@@ -37,7 +37,7 @@ public class Database {
 
     }
 
-    private void parseUserInput(String input){
+    private void parseMainMenuInputs(String input){
         try{
             int choice = Integer.parseInt(input);
 
@@ -70,26 +70,121 @@ public class Database {
         System.out.println("started");
         while (true){
             System.out.println("""
+                    ------------------------------------------------
                     Book Store Main Menu:
                         Please select one of the following options:
-                        1. Browse available books
-                        2. Purchase a book
+                        1. see available books/Search for a book
+                        2. Make a purchase
                         3. Join our store membership
                         4. TODO
                         5. TODO
                         6. Quit
+                    ------------------------------------------------
                     """);
             System.out.print(">>");
-            parseUserInput(scanner.nextLine());
+            parseMainMenuInputs(scanner.nextLine());
         }
     }
 
     private void browse(){
-        //TODO andres
+        System.out.println("""
+                    Please select one of the following options:
+                    1. List all available books
+                    2. See stock count for a specific book
+                    """);
+        System.out.print(">>");
+        int choice;
+        try{
+            choice = Integer.parseInt(scanner.nextLine());
+        }catch (Exception e){
+            System.out.print("Invalid input");
+            return;
+        }
+
+        switch (choice){
+            case 1->{
+                String query = "SELECT title FROM Book;";
+                try {
+                    ResultSet rs=statement.executeQuery(query);
+
+                    while(rs.next()){
+                        System.out.println("-  \""+rs.getString("title")+"\"");
+                    }
+
+                } catch (SQLException e) {
+                    handleSQLException(e);
+                }
+
+            }
+            case 2->{
+                System.out.println("Please enter the tile of the book you'd like to search for:");
+                System.out.print(">>");
+                String input = scanner.nextLine();
+                String query = String.format("""
+                    SELECT in_stock AS stock FROM
+                    Book b  WHERE  b.title = '%s';
+                """,input);
+                System.out.println(query);
+                try {
+                    ResultSet rs=statement.executeQuery(query);
+                    if(!rs.next()){
+                        System.out.println("There are no copies of the requested book");
+                        return;
+                    }
+
+                    int booksInStock = rs.getInt("stock");
+                    System.out.printf("There are %d copies of '%s' in stock\n",booksInStock,input);
+
+                } catch (SQLException e) {
+                    handleSQLException(e);
+                }
+
+            }
+            default -> System.out.print("Invalid input");
+        }
+
 
     }
+
+    private void handleSQLException(SQLException e) {
+        int sqlCode = e.getErrorCode(); // Get SQLCODE
+        String sqlState = e.getSQLState(); // Get SQLSTATE
+
+        System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
+        System.out.println(e);
+    }
+
     private void purchase(){
-        //TODO andres
+        System.out.println("Please enter the tile of the book you'd like to purchase:");
+        System.out.print(">>");
+        String input = scanner.nextLine();
+        String query = String.format("""
+                    SELECT in_stock AS stock FROM
+                    Book b  WHERE  b.title = '%s';
+                """,input);
+        try {
+            ResultSet rs=statement.executeQuery(query);
+            if(!rs.next() ||  rs.getInt("stock")<=0){
+                System.out.println("There are no copies of the requested book");
+                return;
+            }
+            query= String.format("""
+                UPDATE Book
+                SET in_stock = in_stock-1
+                WHERE title = '%s';
+            """,input);
+
+            if(statement.executeUpdate(query) <1){
+                System.out.println("purchase failed inexplicably, sorry about that");
+                return;
+            }
+
+            System.out.printf("Your purchase of '%s' was performed successfully. Thank you for your " +
+                    "patronage\n",input);
+
+        } catch (SQLException e) {
+            handleSQLException(e);
+        }
 
     }
     private void join(){
