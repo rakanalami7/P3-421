@@ -1,3 +1,4 @@
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.util.Scanner;
 import java.sql.* ;
@@ -54,26 +55,29 @@ public class Database {
                 case 4->opt4();
                 case 5->opt5();
                 case 6->terminateProgram(0);
-                default -> throw new Exception();
+                default -> throw new IllegalStateException();
             }
 
-        }catch (Exception e){
+        }catch (IllegalMonitorStateException e){
             System.out.printf("Invalid input [%s], please enter a number ranging from 1 to 6\n",input);
         }
     }
 
-    private void terminateProgram(int exitCode) throws SQLException {
+    private void terminateProgram(int exitCode) {
         if(exitCode!=0){
             System.out.println("program terminating because of some error");
         }
 
-        statement.close();
-        connection.close();
+        try {
+            statement.close();
+            connection.close();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
         System.exit(exitCode);
     }
 
     public void startUserLoop(){
-        System.out.println("started");
         while (true){
             System.out.println("""
                     ------------------------------------------------
@@ -182,7 +186,6 @@ public class Database {
             System.out.println("invalid expiration date");
             return false;
         }
-
         for(char c : tempDate.toCharArray()){
             if (!Character.isDigit(c)){
                 System.out.println("invalid expiration date");
@@ -192,18 +195,27 @@ public class Database {
 
         int month = Integer.parseInt(tempDate.substring(0, 2));
         int year = Integer.parseInt(tempDate.substring(2));
+        LocalDate exprDate;
+        try {
+            exprDate= LocalDate.of(year+2000,month,1);
+        }catch (DateTimeException e){
+            System.out.println(e.getMessage());
+            return false;
+        }
 
 
 
         PreparedStatement query = connection.prepareStatement("INSERT INTO REGULARCUSTOMER (card_num,EXPIRY) values (?,?)"
                 ,Statement.RETURN_GENERATED_KEYS);
         query.setLong(1,Long.parseLong(cardNumS));
-        query.setDate(2, Date.valueOf(LocalDate.of(year+2000,month,1)));
+        query.setDate(2, Date.valueOf(exprDate));
         if(query.executeUpdate()<0 || !query.getGeneratedKeys().next()){
             System.out.println("purchase failed inexplicably, sorry about that");
             return false;
         }
         cachedCID=query.getGeneratedKeys().getInt(1);
+
+
         return true;
     }
 
