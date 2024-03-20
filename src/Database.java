@@ -24,8 +24,8 @@ public class Database {
         String url = "jdbc:db2://winter2024-comp421.cs.mcgill.ca:50000/comp421";
 
         //TODO do not hard code your password in the submission
-        String your_userid = null;
-        String your_password = null;
+        String your_userid = "?????";
+        String your_password = "?????";
 
         if(your_userid == null && (your_userid = System.getenv("SOCSUSER")) == null)
         {
@@ -52,16 +52,17 @@ public class Database {
                 case 1->browse();
                 case 2->purchase();
                 case 3-> logIn();
-                case 4->opt4();
-                case 5->opt5();
+                case 4->reviewPurchaseHistory();
+                case 5->upcomingEventsAndPromotions();
                 case 6->terminateProgram(0);
                 default -> throw new IllegalStateException();
             }
 
-        }catch (IllegalMonitorStateException e){
+        }catch (IllegalStateException | NumberFormatException e){
             System.out.printf("Invalid input [%s], please enter a number ranging from 1 to 6\n",input);
         }
     }
+
 
     private void terminateProgram(int exitCode) {
         if(exitCode!=0){
@@ -86,8 +87,8 @@ public class Database {
                         1. see available books/Search for a book
                         2. Make a purchase
                         3. Log in to your membership account
-                        4. TODO
-                        5. TODO
+                        4. Review Purchase History
+                        5. View Upcoming Events and Promotions
                         6. Quit
                     ------------------------------------------------
                     """);
@@ -307,12 +308,48 @@ public class Database {
         }
 
     }
-    private void opt4(){
-        //todo whoever chooses to do this
-    }
-    private void opt5(){
-        //todo whoever chooses to do this
+
+    private void reviewPurchaseHistory() {
+        if(cachedCID == -1) {
+            System.out.println("You must be logged in to view purchase history.");
+            return;
+        }
+        try {
+            PreparedStatement query = connection.prepareStatement("""
+                SELECT t.tnum, t.date_time, b.title, c.isbn
+                FROM Transaction t 
+                JOIN Contains c ON t.tnum = c.tnum
+                JOIN Book b ON c.isbn = b.isbn
+                WHERE t.cid = ?;
+            """);
+            query.setInt(1, cachedCID);
+            ResultSet rs = query.executeQuery();
+            while(rs.next()) {
+                int transactionNum = rs.getInt("tnum");
+                Timestamp date = rs.getTimestamp("date_time");
+                String title = rs.getString("title");
+                System.out.printf("%d: %s (Date: %s)\n", transactionNum, title, date.toString());
+            }
+        } catch (SQLException e) {
+            handleSQLException(e);
+        }
     }
 
-
+    private void upcomingEventsAndPromotions() {
+        try {
+            System.out.println("Upcoming Events:");
+            ResultSet rsEvents = statement.executeQuery("SELECT event_ID, address, start_time, duration FROM Event WHERE start_time > CURRENT_DATE ORDER BY start_time ASC;");
+            while(rsEvents.next()) {
+                System.out.printf("Event ID: %d at %s starting at %s for %d hours\n", rsEvents.getInt("event_ID"), rsEvents.getString("address"), rsEvents.getString("start_time"), rsEvents.getInt("duration"));
+            }
+            System.out.println("Upcoming Promotions:");
+            ResultSet rsPromotions = statement.executeQuery("SELECT promo_ID, address, promo_start, promo_end, disc_rate FROM Promotion WHERE promo_end > CURRENT_DATE ORDER BY promo_start ASC;");
+            while(rsPromotions.next()) {
+                System.out.printf("Promotion ID: %d at %s from %s to %s at a discount rate of %.2f%%\n", rsPromotions.getInt("promo_ID"), rsPromotions.getString("address"), rsPromotions.getDate("promo_start"), rsPromotions.getDate("promo_end"), rsPromotions.getFloat("disc_rate") * 100);
+            }
+        } catch (SQLException e) {
+            handleSQLException(e);
+        }
+    }
+    
 }
